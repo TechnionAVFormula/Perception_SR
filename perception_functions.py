@@ -18,7 +18,7 @@ else:
 
 def get_cones_from_camera(width, height, pixels):
     # convert from bit representation to RGB + depth format
-    img_RGB, img_depth = convert_img_bits_to_RGBD(width, height, pixels)
+    img_RGB = convert_img_bits_to_RGBD(width, height, pixels)
     # set NN parameters
     weights_path = 'outputs/february-2020-experiments/yolo_baseline/9.weights'
     model_cfg = 'model_cfg/yolo_baseline.cfg'
@@ -29,23 +29,19 @@ def get_cones_from_camera(width, height, pixels):
     # classify detected cone to types
     for BB in BB_list:
         cone_color = predict_cone_color(img_RGB,BB)
-        cone_depth = predict_cone_depth(img_depth,BB)
+        # cone_depth = predict_cone_depth(img_depth,BB)
         # BB = [x,y,h,w,type,depth]
         BB.append(cone_color)
-        BB.append(cone_depth)
     # BB_list = [BB_1,BB_2,...,BB_N]
-    return img_depth, BB_list
+
+    img_RGB.close()
+
+    return BB_list
 
 def convert_img_bits_to_RGBD(width, height, pixels):
     # convert bit format to RGB
     img_RGB = Image.frombytes("RGB", (width, height), pixels, 'raw', 'RGBX', 0,-1)
-    # convert bit format to depth channel
-    CHANNEL_COUNT = 4
-    frames = np.frombuffer(pixels, dtype=np.uint8)
-    deinterleaved = [frames[idx::CHANNEL_COUNT] for idx in range(CHANNEL_COUNT)]
-    img_depth = np.reshape(deinterleaved[3], (width, height))
-
-    return img_RGB, img_depth
+    return img_RGB
 
 def cut_cones_from_img(target_img, BB):
     [x, y, h, w] = BB
@@ -110,7 +106,7 @@ def predict_cone_depth(img_depth, BB):
     max_pixel_value = array.max()
     return max_pixel_value
 
-def trasform_img_cones_to_xyz(img_cones, img_depth, h_fov, v_fov, width, height):
+def trasform_img_cones_to_xyz(img_cones, depth_type, img_depth, h_fov, v_fov, width, height):
     # get BB in image plain (img_cones) and transform it to xyz coordinates of camera (xyz_cones)
 
     # choose single representative point in each BB:
@@ -118,11 +114,17 @@ def trasform_img_cones_to_xyz(img_cones, img_depth, h_fov, v_fov, width, height)
     for img_cone in img_cones:
         img_cone_points.append(get_BB_img_point(img_cone))
 
+    depth_pixels_type = np.float32 if depth_type == messages.sensors.DCH_Float32 else np.uint16
+    depth_arr = np.frombuffer(img_depth, dtype=depth_pixels_type).reshape(width, height)
+
     # extract xyz coordinates of each cone
     xyz_cones = []  # list of (X,Y,Z,type) in ENU coordinate system (X - right, Y-forward, Z-upward)
     for img_cone_point in img_cone_points:
-        #img_depth_px = img_depth.load()
-        img_cone_point_depth = img_depth[img_cone_point[0:2]]  # specific point depth value
+        row = img_cone_point[0]
+        col = img_cone_point[1]
+        img_cone_point_depth = depth_arr[row][col]  # specific point depth value
+        print(img_cone_point, img_cone_point_depth)
+        # uint16_t range: 0-65,535
         xyz_cones.append(trasform_img_point_to_xyz(img_cone_point,img_cone_point_depth,h_fov,v_fov,width,height))
         # insert cone type to xyz_cones:
         xyz_cones[-1].append(img_cone_point[-1])
@@ -147,12 +149,8 @@ def trasform_img_point_to_xyz(img_point, img_depth, h_fov, v_fov, width, height)
 
 def get_BB_img_point(img_cone):
     # return representative point in BB (center of BB at the moment)
-    x = img_cone[0]
-    y = img_cone[1]
-    w = img_cone[2]
-    h = img_cone[3]
-    type = img_cone[4]
-    return int(x+w/2), int(y+h/2), type
+    x, y, h, w, color = img_cone
+    return int(x+w/2), int(y+h/2), color
 
 def draw_results_on_image(img, BB_list, type_map):
 
@@ -168,14 +166,14 @@ def draw_results_on_image(img, BB_list, type_map):
         w = BB_list[i][3]
         raw_type = BB_list[i][4]
         # build parameters
-        type = type_map[raw_type-1]
-        text = f"({i}) {type}"
+        color = type_map[raw_type-1]
+        text = f"({i}) {color}"
         x1 = x0 + w
         y1 = y0 + h
         # draw BB + indicative text
-        draw.rectangle((x0, y0, x1, y1), outline=type)
+        draw.rectangle((x0, y0, x1, y1), outline=color)
         w_text, h_text = font.getsize(text)
-        draw.rectangle((x0, y0-h_text, x0 + w_text, y0), fill=type)
+        draw.rectangle((x0, y0-h_text, x0 + w_text, y0), fill=color)
         draw.text((x0, y0-h_text),text , fill=(0, 0, 0, 128))
 
     return img_with_boxes

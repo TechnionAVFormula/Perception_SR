@@ -17,7 +17,9 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 from tensorboardX import SummaryWriter
 
-from PIL import Image, ImageDraw
+# from PIL import Image, ImageDraw
+
+import logging
 
 import torchvision
 from models import Darknet
@@ -36,6 +38,7 @@ def get_BB_from_img(target_img,weights_path,model_cfg,conf_thres,nms_thres,xy_lo
 
     cuda = torch.cuda.is_available()
     device = torch.device('cuda:0' if cuda else 'cpu')
+    logging.info("Running with %s", device)
     random.seed(0)
     torch.manual_seed(0)
     if cuda:
@@ -90,7 +93,7 @@ def single_img_detect(target_img,model,device,conf_thres,nms_thres):
             if nms_indices.shape[0] == 0:  
                 continue
         img_with_boxes = target_img
-        draw = ImageDraw.Draw(img_with_boxes)
+        # draw = ImageDraw.Draw(img_with_boxes)
         w, h = img_with_boxes.size
 
         for i in range(len(main_box_corner)):
