@@ -17,4 +17,4 @@ OUT_MESSAGE_FILE = 'Messages/perception.messages'
 CONFIG = ConfigEnum.LOCAL_TEST 
 # CONFIG = ConfigEnum.REAL_TIME
 
-SAVE_RUN_DIR="Messages/Run_1_05_20"
+SAVE_RUN_DIR=None

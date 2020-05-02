@@ -45,7 +45,7 @@ class Perception:
             self._client.stop()
             self._client.join()
  
-    def process_camera_message(self, camera_msg, depth_camera_msg, ground_truth_msg):
+    def process_camera_message(self, camera_msg, depth_camera_msg):
         logging.info("Started processing camera message id: %d, depth camera message id: %d", 
             camera_msg.header.id, depth_camera_msg.header.id)
 
@@ -53,8 +53,6 @@ class Perception:
         camera_msg.data.Unpack(camera_data)
         depth_camera_data = messages.sensors.DepthCameraSensor()
         depth_camera_msg.data.Unpack(depth_camera_data)
-        ground_truth_data = messages.ground_truth.GroundTruth()
-        ground_truth_msg.data.Unpack(ground_truth_data)
         # Camera data has the following properties: width, height, pixels, h_fov, v_fov
         # print(f"Got camera width: {camera_data.width}, height: {camera_data.height}")
 
@@ -65,11 +63,8 @@ class Perception:
             with open(os.path.join(SAVE_RUN_DIR, f"{depth_camera_data.frame_number}_depth_camera_msg_{depth_camera_msg.header.id}.bin"), 'wb') as f:
                 f.write(depth_camera_msg.SerializeToString())
 
-            with open(os.path.join(SAVE_RUN_DIR, f"{ground_truth_data.frame_number}_ground_truth_{ground_truth_msg.header.id}.bin"), 'wb') as f:
-                f.write(ground_truth_msg.SerializeToString())
-
-        logging.info("Processing camera message frame: %d, depth camera message frame: %d, ground truth message frame: %d", 
-            camera_data.frame_number, depth_camera_data.frame_number, ground_truth_data.frame_number)
+        logging.info("Processing camera message frame: %d, depth camera message frame: %d", 
+            camera_data.frame_number, depth_camera_data.frame_number)
 
         # Create the new cone map and append to it all of the recognized cones from the image
         cone_map = messages.perception.ConeMap()
@@ -127,8 +122,8 @@ class Perception:
     def check_for_camera_messages(self):
         try:
             # In the future can be replaced with getting the camera directly
-            camera_msg, depth_camera_msg, ground_truth = self._client.get_camera_message(timeout=self.message_timeout) 
-            cone_map = self.process_camera_message(camera_msg, depth_camera_msg, ground_truth)
+            camera_msg, depth_camera_msg = self._client.get_camera_message(timeout=self.message_timeout) 
+            cone_map = self.process_camera_message(camera_msg, depth_camera_msg)
 
             logging.info("Outputing cone map: %s", json_format.MessageToJson(cone_map))
 

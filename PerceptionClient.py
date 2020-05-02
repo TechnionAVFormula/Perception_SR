@@ -43,7 +43,7 @@ class PerceptionClient(ModuleClient):
         return super().send_message(msg, timeout=timeout)
 
     def get_camera_message(self, blocking=True, timeout=None):
-        return self.camera_messages.get(blocking, timeout), self.depth_camera_messages.get(blocking, timeout), self.ground_truth.get(blocking, timeout)
+        return self.camera_messages.get(blocking, timeout), self.depth_camera_messages.get(blocking, timeout)
 
     def pop_server_message(self, blocking=False, timeout=None):
         return self.server_messages.get(blocking, timeout)
