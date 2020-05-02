@@ -45,5 +45,8 @@ class PerceptionClient(ModuleClient):
     def get_camera_message(self, blocking=True, timeout=None):
         return self.camera_messages.get(blocking, timeout), self.depth_camera_messages.get(blocking, timeout)
 
+    def get_ground_truth_message(self, blocking=True, timeout=None):
+        return self.ground_truth.get(blocking, timeout)
+        
     def pop_server_message(self, blocking=False, timeout=None):
         return self.server_messages.get(blocking, timeout)

@@ -131,11 +131,41 @@ class Perception:
         except MessageDeque.NoFormulaMessages:
             pass
 
+    def debug_process_ground_truth_message(self, ground_truth_message):
+        ground_truth_data = messages.ground_truth.GroundTruth()
+        ground_truth_message.data.Unpack(ground_truth_data)
+            
+        cone_map = messages.perception.ConeMap()
+        for bb in ground_truth_data.perception_ground_truth.bbs:
+            cone = messages.perception.Cone()
+            cone.cone_id = bb.cone_id
+            cone.type = bb.type
+            cone.x = bb.position.x
+            cone.y = bb.position.y
+            cone.z = bb.position.z
+            cone_map.cones.append(cone)  # append the new cone to the cone map
+        
+        return cone_map
+
+                
+    def check_for_ground_truth_messages(self):
+        try:
+            # In the future can be replaced with getting the camera directly
+            ground_truth_message = self._client.get_ground_truth_message(timeout=self.message_timeout) 
+            cone_map = self.debug_process_ground_truth_message(ground_truth_message)
+
+            logging.info("Outputing cone map: %s", json_format.MessageToJson(cone_map))
+
+            self.send_message2state(ground_truth_message.header.id, cone_map)    
+        except MessageDeque.NoFormulaMessages:
+            pass
+
     def run(self):
         while True:
             try:
                 self.check_for_server_messages()
                 self.check_for_camera_messages()
+                # self.check_for_ground_truth_messages()
             except Exception:
                 logging.warn("Got exception in loop", exc_info=True)
             
