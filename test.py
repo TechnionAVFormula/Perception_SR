@@ -56,7 +56,7 @@ def main():
     # print BB results
     print("Bounding box list in image plain:")
     for i, BB in enumerate(BB_list):
-        print(f"({i}) x = {BB[0]}, y = {BB[1]}, h = {BB[2]}, w = {BB[3]}, type = {type_map[BB[4]-1]}, depth = {BB[5]}")
+        print(f"({i}) x = {BB[0]}, y = {BB[1]}, h = {BB[2]}, w = {BB[3]}, type = {type_map[BB[4]-1]}")
 
     # draw results on image
     img_with_boxes = draw_results_on_image(img_RGB, BB_list, type_map)

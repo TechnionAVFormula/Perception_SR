@@ -114,15 +114,16 @@ def trasform_img_cones_to_xyz(img_cones, depth_type, img_depth, h_fov, v_fov, wi
     for img_cone in img_cones:
         img_cone_points.append(get_BB_img_point(img_cone))
 
-    depth_pixels_type = np.float32 if depth_type == messages.sensors.DCH_Float32 else np.uint16
-    depth_arr = np.frombuffer(img_depth, dtype=depth_pixels_type).reshape(width, height)
+    # depth_pixels_type = np.float32 if depth_type == messages.sensors.DCH_Float32 else np.uint16
+    # depth_arr = np.frombuffer(img_depth, dtype=depth_pixels_type).reshape(width, height)
+    depth_arr = Image.frombytes("I;16", (width, height), img_depth).load()
 
     # extract xyz coordinates of each cone
     xyz_cones = []  # list of (X,Y,Z,type) in ENU coordinate system (X - right, Y-forward, Z-upward)
     for img_cone_point in img_cone_points:
         row = img_cone_point[0]
         col = img_cone_point[1]
-        img_cone_point_depth = depth_arr[row][col]  # specific point depth value
+        img_cone_point_depth = depth_arr[row, col]  # specific point depth value
         print(img_cone_point, img_cone_point_depth)
         # uint16_t range: 0-65,535
         xyz_cones.append(trasform_img_point_to_xyz(img_cone_point,img_cone_point_depth,h_fov,v_fov,width,height))
