@@ -1,5 +1,6 @@
 from PerceptionClient import PerceptionClient
-from perception_functions import get_cones_from_camera, trasform_img_cones_to_xyz
+from perception_functions import get_cones_from_camera
+from geometry import trasform_img_cones_to_xyz
 import time
 import signal
 import os
@@ -69,7 +70,7 @@ class Perception:
         # Create the new cone map and append to it all of the recognized cones from the image
         cone_map = messages.perception.ConeMap()
 
-        # get image cones: img_cones=[[x,y,h,w,type,depth],[x,y,h,w,type,depth],....]
+        # Get image cones: img_cones=[[x,y,h,w,type,depth],[x,y,h,w,type,depth],....]
         # x,y - left top bounding box position in image plain
         # w, h - width and height of bounding box in pixels
         # type - cone color: 'B' - blue, 'Y' - yellow, 'O' - orange
@@ -83,7 +84,10 @@ class Perception:
         # xyz_cones = [[X, Y, Z, type], [X, Y, Z, type], ....]
         # X,Y,Z - in ENU coordinate system (X - right, Y-forward, Z-upward)
         # type - cone color: 'B' - blue, 'Y' - yellow, 'O' - orange
-        xyz_cones = trasform_img_cones_to_xyz(img_cones, depth_camera_data.config.data_type, depth_camera_data.pixels, camera_data.config.hfov, camera_data.config.vfov, camera_data.width, camera_data.height)
+        camera_pos = camera_data.config.sensor_position
+        xyz_cones = trasform_img_cones_to_xyz(img_cones, camera_data.width, camera_data.height,
+                                              depth_camera_data.config.data_type, depth_camera_data.pixels,
+                                              camera_data.config.hfov, camera_data.config.vfov, camera_pos)
 
         for index, xyz_cone in enumerate(xyz_cones):
             #   Create new cone and set its properties

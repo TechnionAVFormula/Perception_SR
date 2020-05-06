@@ -106,48 +106,6 @@ def predict_cone_depth(img_depth, BB):
     max_pixel_value = array.max()
     return max_pixel_value
 
-def trasform_img_cones_to_xyz(img_cones, depth_type, img_depth, h_fov, v_fov, width, height):
-    # get BB in image plain (img_cones) and transform it to xyz coordinates of camera (xyz_cones)
-
-    # choose single representative point in each BB:
-    img_cone_points = []  # list of (x,y,type) BB representative point in img plain
-    for img_cone in img_cones:
-        img_cone_points.append(get_BB_img_point(img_cone))
-
-    # depth_pixels_type = np.float32 if depth_type == messages.sensors.DCH_Float32 else np.uint16
-    # depth_arr = np.frombuffer(img_depth, dtype=depth_pixels_type).reshape(width, height)
-    depth_arr = Image.frombytes("I;16", (width, height), img_depth).load()
-
-    # extract xyz coordinates of each cone
-    xyz_cones = []  # list of (X,Y,Z,type) in ENU coordinate system (X - right, Y-forward, Z-upward)
-    for img_cone_point in img_cone_points:
-        row = img_cone_point[0]
-        col = img_cone_point[1]
-        img_cone_point_depth = depth_arr[row, col]  # specific point depth value
-        print(img_cone_point, img_cone_point_depth)
-        # uint16_t range: 0-65,535
-        xyz_cones.append(trasform_img_point_to_xyz(img_cone_point,img_cone_point_depth,h_fov,v_fov,width,height))
-        # insert cone type to xyz_cones:
-        xyz_cones[-1].append(img_cone_point[-1])
-
-    return xyz_cones
-
-def trasform_img_point_to_xyz(img_point, img_depth, h_fov, v_fov, width, height):
-    # extract parameters
-    u = img_point[0]
-    v = img_point[1]
-    alpha_h = (180 - h_fov)/2  # [deg]
-    alpha_v = (180 - v_fov)/2  # [deg]
-    # calculating gammas:
-    gamma_h = alpha_h + (1-u / width) * h_fov  # [deg]
-    gamma_v = alpha_v + (v / height) * v_fov  # [deg]
-    # calculating X,Y,Z in ENU coordinate system (X - right, Y-forward, Z-upward)
-    Y = img_depth
-    X = img_depth / np.tan(gamma_h * np.pi / 180)
-    Z = img_depth / np.tan(gamma_v * np.pi / 180)
-
-    return [X, Y, Z]
-
 def get_BB_img_point(img_cone):
     # return representative point in BB (center of BB at the moment)
     x, y, h, w, color = img_cone
