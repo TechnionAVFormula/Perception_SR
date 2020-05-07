@@ -46,7 +46,6 @@ class DarkNetParser(object):
             return None, None, None
         if remainder.replace(' ', '')[0] == '#':
             remainder = remainder.split('\n', 1)[1]
-
         layer_param_block, remainder = remainder.split('\n\n', 1)
         layer_param_lines = layer_param_block.split('\n')[1:]
         layer_name = str(self.layer_counter).zfill(3) + '_' + layer_type
@@ -340,6 +339,7 @@ class GraphBuilderONNX(object):
             print(helper.printable_graph(self.graph_def))
         model_def = helper.make_model(self.graph_def,
                                       producer_name='NVIDIA TensorRT sample')
+        model_def.ir_version = 3
         return model_def
 
     def _make_onnx_node(self, layer_name, layer_dict):
@@ -415,9 +415,9 @@ class GraphBuilderONNX(object):
         previous_node_specs = self._get_previous_node_specs()
         inputs = [previous_node_specs.name]
         previous_channels = previous_node_specs.channels
-        kernel_size = layer_dict['size']
-        stride = layer_dict['stride']
-        filters = layer_dict['filters']
+        kernel_size = layer_dict['size'] if 'size' in layer_dict else 1
+        stride = layer_dict['stride'] if 'stride' in layer_dict else 1
+        filters = layer_dict['filters'] if 'filters' in layer_dict else 0
         pad = (kernel_size - 1) // 2
         batch_normalize = True
         if 'filters' in layer_dict.keys() and layer_dict['filters'] == 'preyolo':

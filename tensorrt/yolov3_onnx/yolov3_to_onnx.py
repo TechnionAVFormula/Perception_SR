@@ -549,9 +549,10 @@ class GraphBuilderONNX(object):
         previous_node_specs = self._get_previous_node_specs()
         inputs = [previous_node_specs.name]
         previous_channels = previous_node_specs.channels
-        kernel_size = layer_dict['size']
-        stride = layer_dict['stride']
-        filters = layer_dict['filters']
+        kernel_size = layer_dict['size'] if 'size' in layer_dict else 1
+        stride = layer_dict['stride'] if 'stride' in layer_dict else 1
+        filters = layer_dict['filters'] if 'filters' in layer_dict else 0
+
         batch_normalize = False
         if 'batch_normalize' in layer_dict.keys(
         ) and layer_dict['batch_normalize'] == 1:
