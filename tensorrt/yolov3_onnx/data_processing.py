@@ -51,6 +51,7 @@ import math
 from PIL import Image
 import numpy as np
 import os
+import torchvision
 
 
 # YOLOv3-608 has been trained with these 80 categories from COCO:
@@ -95,6 +96,23 @@ class PreprocessYOLO(object):
         image_preprocessed = self._shuffle_and_normalize(image_resized)
         return image_raw, image_preprocessed
 
+    def _calculate_padding(self, img):
+        orig_height, orig_width = img.size
+        new_height, new_width = self.yolo_input_resolution
+        # recalculate the padding
+        if max(orig_height, orig_width) == orig_height:
+            new_img_width = orig_height * new_width / new_height
+            scale_factor = new_height / orig_height
+            pad_h = 0
+            pad_w = int((new_img_width - orig_width) / 2)
+        else:
+            scale_factor = new_width / orig_width
+            new_img_height = orig_width * new_height / new_width
+            pad_w = 0
+            pad_h = int((new_img_height - orig_height) / 2)
+        return pad_h, pad_w, scale_factor
+
+
     def _load_and_resize(self, input_image_path):
         """Load an image from the specified path and resize it to the input resolution.
         Return the input image before resizing as a PIL Image (required for visualization),
@@ -105,14 +123,19 @@ class PreprocessYOLO(object):
         """
 
         image_raw = Image.open(input_image_path)
-        # Expecting yolo_input_resolution in (height, width) format, adjusting to PIL
-        # convention (width, height) in PIL:
-        new_resolution = (
-            self.yolo_input_resolution[1],
-            self.yolo_input_resolution[0])
-        image_resized = image_raw.resize(
-            new_resolution, resample=Image.BICUBIC)
-        image_resized = np.array(image_resized, dtype=np.float32, order='C')
+        pad_h, pad_w, ratio = self._calculate_padding(image_raw)
+       
+        img = image_raw
+        image_resized = torchvision.transforms.functional.pad(img, padding=(pad_w, pad_h, pad_w, pad_h), fill=(127, 127, 127), padding_mode="constant")
+        image_resized = torchvision.transforms.functional.resize(img,self.yolo_input_resolution)
+        # # Expecting yolo_input_resolution in (height, width) format, adjusting to PIL
+        # # convention (width, height) in PIL:
+        # new_resolution = (
+        #     self.yolo_input_resolution[1],
+        #     self.yolo_input_resolution[0])
+        # image_resized = image_raw.resize(
+        #     new_resolution, resample=Image.BICUBIC)
+        # image_resized = np.array(image_resized, dtype=np.float32, order='C')
         return image_raw, image_resized
 
     def _shuffle_and_normalize(self, image):
@@ -123,12 +146,14 @@ class PreprocessYOLO(object):
         Keyword arguments:
         image -- image as three-dimensional NumPy float array, in HWC format
         """
-        image /= 255.0
-        # HWC to CHW format:
-        image = np.transpose(image, [2, 0, 1])
-        # CHW to NCHW format
-        image = np.expand_dims(image, axis=0)
-        # Convert the image to row-major order, also known as "C order":
+        image = torchvision.transforms.functional.to_tensor(image)
+        image = image.unsqueeze(0)
+        # image /= 255.0
+        # # HWC to CHW format:
+        # image = np.transpose(image, [2, 0, 1])
+        # # CHW to NCHW format
+        # image = np.expand_dims(image, axis=0)
+        # # Convert the image to row-major order, also known as "C order":
         image = np.array(image, dtype=np.float32, order='C')
         return image
 
