@@ -3,6 +3,7 @@ import numpy as np
 from perception_functions import get_BB_img_point
 from PIL import Image
 
+
 def trasform_img_cones_to_xyz(img_cones,width, height, depth_type, img_depth, h_fov, v_fov, camera_pos):
     '''
     Get multiple BB in image plain (img_cones) and transform it to xyz coordinates of cognata car (xyz_cones)
@@ -18,7 +19,7 @@ def trasform_img_cones_to_xyz(img_cones,width, height, depth_type, img_depth, h_
     '''
 
     # Extract parameters
-    K, R_inv, t_inv = extract_parameters_to_xyz_from_uvd(width, height, h_fov, camera_pos)
+    K, R_inv, t_inv, cx, cy, f = extract_parameters_to_xyz_from_uvd(width, height, h_fov, camera_pos)
 
     # Translating depth image from bytes to pixel array
     depth_arr = np.asarray(Image.frombytes("I;16", (width, height), img_depth))
@@ -33,10 +34,12 @@ def trasform_img_cones_to_xyz(img_cones,width, height, depth_type, img_depth, h_
     index_x = img_cone_points[:, 0].astype(np.int)
     index_y = img_cone_points[:, 1].astype(np.int)
     depths = depth_arr[index_y, index_x]
-    depths = depths/100  # conver from [cm] to [m]
+    depths = depths/100  # convert from [cm] to [m]
+    depths = convert_radial_to_perpendicular_depth(img_cone_points[:,0:2], depths, cx, cy, f)
 
     # Extract xyz coordinates of each cone together using matrices
-    positions = world_XYZ_from_uvd(img_cone_points[:,0:2], depths=depths, K=K, R_inv=R_inv, t_inv=t_inv)
+    positions = world_XYZ_from_uvd(img_cone_points[:,0:2], depths=depths, K=K, R_inv=R_inv,
+                                   t_inv=t_inv)
 
     # Arrange the data (need to be upgrade to more compact way with no for loop)
     xyz_cones = []  # list of (X,Y,Z,type) in ENU coordinate system (X - right, Y-forward, Z-upward)
@@ -57,7 +60,7 @@ def extract_parameters_to_xyz_from_uvd(width, height, h_fov, camera_pos):
                                         #  f          (  2 )
     # Camera pin hole position on image
     cx = width / 2
-    cy = height / 2
+    cy = height / 2 - 3  # horizon is 3 pixels above the centerline
 
     # Camera matrix
     K = np.array([[f, 0, cx],
@@ -78,7 +81,7 @@ def extract_parameters_to_xyz_from_uvd(width, height, h_fov, camera_pos):
     # Camera position in cognata car coordinate system
     t_inv = np.array([camera_pos.x,camera_pos.y,camera_pos.z] , dtype=np.float)
 
-    return K ,R_inv ,t_inv
+    return K, R_inv, t_inv, cx, cy, f
 
 def trasform_img_point_to_xyz(img_point, img_depth, h_fov, v_fov, width, height):
     # extract parameters
@@ -101,19 +104,51 @@ def inverse_perspective(R, t):
     ti = -Ri @ t
     return Ri, ti
 
+def convert_radial_to_perpendicular_depth(points, depths, cx, cy, f):
+    '''
+    converts radial depth to perpendicular depth in image plain
+    :param points: array of points in the image 2D plain
+    :param depths: appropriate radial depth values for each point in points
+    :param cx: image principal  point horizontal pixel index
+    :param cy: image principal point vertial pixel index
+    :param f: camera focal length
+    :return: corresponding perpendicular depth values
+    '''
+    return depths*f/(f**2 + (points[:, 0]-cx)**2 + (points[:, 1]-cy)**2)**0.5
 
+def compare_XYZ_to_GT (xyz_cones, xyz_cones_GT):
+    '''
+    get list of xyz detections and list of ground truth xyz and return index array of couples
+    connecting between the detected xyz and the closest ground truth xyz
+    :param xyz_cones:
+    :param xyz_cones_GT:
+    :return: indices array: corresponding closest indices in GT array for each of the xyz detections
+    '''
+    indices = [0]*len(xyz_cones)
+    for i, xyz_cone in enumerate(xyz_cones):
+        min_index, min_dist = 0, 0
+        for i_GT, xyz_cone_GT in enumerate(xyz_cones_GT):
+            dX = xyz_cone[0]-xyz_cone_GT[0]
+            dY = xyz_cone[1] - xyz_cone_GT[1]
+            dZ = xyz_cone[2] - xyz_cone_GT[2]
+            dist = (dX**2+dY**2+dZ**2)**0.5
+            if dist < min_dist or i_GT == 0:
+                min_dist = dist
+                min_index = i_GT
+        indices[i] = min_index
+
+    return indices
 
 def world_XYZ_from_uvd(points, depths, K, R_inv, t_inv):
     '''
     Transformingu uvd (uv in 2D image plain + depth) to xyz in world coordinates using matrices
     :param points: array of points in the image 2D plain
-    :param depths: appropriate depth values for each point in points
+    :param depths: appropriate perpendicular depth values for each point in points
     :param K: camera matrix
     :param Rinv: transformation from camera coordinate system to world coordinate system
     :param tinv: camera position in world coordinates
     :return: position of requested points in world coordinates
     '''
-
     K_inv = np.linalg.inv(K)
     uv1 = cv2.convertPointsToHomogeneous(points)[:,0,:]
     # s(u,v,1) = K(R(xyz)+t)

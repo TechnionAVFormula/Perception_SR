@@ -1,7 +1,7 @@
 from pyFormulaClientNoNvidia import messages
 from PIL import Image
 from perception_functions import get_cones_from_camera, draw_results_on_image
-from geometry import trasform_img_cones_to_xyz
+from geometry import trasform_img_cones_to_xyz, compare_XYZ_to_GT
 from google.protobuf import json_format
 
 # Parameters
@@ -11,15 +11,15 @@ type_map[messages.perception.Blue-1] ='blue'
 type_map[messages.perception.Orange-1] ='orange'
 
 # Open message file: {msg frame}_camera_msg_{msg id}.bin
-with open('Run_1_05_20/1_camera_msg_4.bin', 'rb') as f:
+with open('Run_1_05_20/125_camera_msg_624.bin', 'rb') as f:
     buffer = f.read()
     camera_msg = messages.common.Message()
     camera_msg.ParseFromString(buffer)
-with open('Run_1_05_20/1_depth_camera_msg_3.bin', 'rb') as f:
+with open('Run_1_05_20/125_depth_camera_msg_623.bin', 'rb') as f:
     buffer = f.read()
     depth_camera_msg = messages.common.Message()
     depth_camera_msg.ParseFromString(buffer)
-with open('Run_1_05_20/1_ground_truth_5.bin', 'rb') as f:
+with open('Run_1_05_20/125_ground_truth_625.bin', 'rb') as f:
     buffer = f.read()
     ground_truth_msg = messages.common.Message()
     ground_truth_msg.ParseFromString(buffer)
@@ -36,21 +36,47 @@ camera_pos = camera_data.config.sensor_position
 camera_pos.z = 1.2  # an error occured which sets z=0 in these sample messages
 camera_pos_depth = depth_camera_data.config.sensor_position
 
+# extract ground truth data
+xyz_cones_GT = []
+for bb in ground_truth_data.perception_ground_truth.bbs:
+    xyz_cones_GT.append([bb.position.x, bb.position.y, bb.position.z, bb.type])
+
+img_cones = [[399, 338, 30, 20, 1],
+             [374, 360, 43, 29, 1],
+             [319, 402, 55, 38, 1],
+             [684, 317, 15, 10, 3],
+             [423, 313, 16, 10, 1],
+             [902, 361, 44, 30, 3],
+             [416, 324, 20, 13, 1],
+             [433, 307, 12, 8, 1],
+             [722, 324, 23, 14, 3],
+             [655, 309, 13, 9, 3],
+             [787, 336, 32, 22, 3]]
+
 # Process camera data
-img_cones = get_cones_from_camera(camera_data.width, camera_data.height, camera_data.pixels)
+# img_cones = get_cones_from_camera(camera_data.width, camera_data.height, camera_data.pixels)
 xyz_cones = trasform_img_cones_to_xyz(img_cones, camera_data.width, camera_data.height,
                                       depth_camera_data.config.data_type, depth_camera_data.pixels,
                                       camera_data.config.hfov, camera_data.config.vfov, camera_pos)
+# write detected cones to file:
+# with open('125_detection.txt', 'w') as f:
+#    for item in img_cones:
+#        f.write("%s\n" % item)
+
+# compare ground truth to detection:
+indices = compare_XYZ_to_GT(xyz_cones, xyz_cones_GT)
 
 # Print detection results
 print("Bounding box list in image plain:")
 for i, BB in enumerate(img_cones):
     print(f"({i}) u = {BB[0]}, v = {BB[1]}, h = {BB[2]}, w = {BB[3]}, type = {type_map[BB[4]-1]}")
-print("Cones X,Y,Z list in ENU coordinate system (X - right, Y - forward, Z - upward):")
+print("Cones X,Y,Z list in cognata coordinate system (X - right, Y - forward, Z - upward):")
 for i, xyz_cone in enumerate(xyz_cones):
-    print(f"({i}) X = {round(xyz_cone[0],2)}, Y = {round(xyz_cone[1],2)}, Z = {round(xyz_cone[2],2)}, type = {type_map[xyz_cone[3] - 1]}")
-# Print GT results
-print(json_format.MessageToJson(ground_truth_data))
+    print(f"=====================Cone ({i})==========================")
+    print("---------------------Detected--------------------------")
+    print(f"X = {round(xyz_cone[0],2)}, Y = {round(xyz_cone[1],2)}, Z = {round(xyz_cone[2],2)}, type = {type_map[xyz_cone[3] - 1]}")
+    print("--------------------closest GT-------------------------")
+    print(f"X = {round(xyz_cones_GT[indices[i]][0], 2)}, Y = {round(xyz_cones_GT[indices[i]][1], 2)}, Z = {round(xyz_cones_GT[indices[i]][2], 2)}, type = {type_map[xyz_cones_GT[indices[i]][3] - 1]}\n")
 
 # Export captured images
 img_RGB = Image.frombytes("RGB", (camera_data.width, camera_data.height), camera_data.pixels, 'raw', 'RGBX', 0,-1)
