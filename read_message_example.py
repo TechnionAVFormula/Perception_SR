@@ -3,6 +3,8 @@ from PIL import Image
 from perception_functions import get_cones_from_camera, draw_results_on_image
 from geometry import trasform_img_cones_to_xyz, compare_XYZ_to_GT
 from google.protobuf import json_format
+import ast
+import csv
 
 # Parameters
 type_map = [' ']*3
@@ -33,38 +35,47 @@ ground_truth_data = messages.ground_truth.GroundTruth()
 ground_truth_msg.data.Unpack(ground_truth_data)
 
 camera_pos = camera_data.config.sensor_position
-camera_pos.z = 1.2  # an error occured which sets z=0 in these sample messages
+camera_pos.z = 1.2  # an error occurred which sets z=0 in these sample messages
 camera_pos_depth = depth_camera_data.config.sensor_position
 
-# extract ground truth data
+# Extract ground truth data
 xyz_cones_GT = []
 for bb in ground_truth_data.perception_ground_truth.bbs:
     xyz_cones_GT.append([bb.position.x, bb.position.y, bb.position.z, bb.type])
 
-img_cones = [[399, 338, 30, 20, 1],
-             [374, 360, 43, 29, 1],
-             [319, 402, 55, 38, 1],
-             [684, 317, 15, 10, 3],
-             [423, 313, 16, 10, 1],
-             [902, 361, 44, 30, 3],
-             [416, 324, 20, 13, 1],
-             [433, 307, 12, 8, 1],
-             [722, 324, 23, 14, 3],
-             [655, 309, 13, 9, 3],
-             [787, 336, 32, 22, 3]]
+# Read detected cones from file
+img_cones = []
+with open('Run_1_05_20/125_detection.txt', 'r') as filehandle:
+    for line in filehandle:
+        # remove linebreak which is the last character of the string
+        currentLine = line[:-1]
+        # convert line string to list
+        currentLine = ast.literal_eval(currentLine)
+        # add item to the list
+        img_cones.append(currentLine)
 
 # Process camera data
 # img_cones = get_cones_from_camera(camera_data.width, camera_data.height, camera_data.pixels)
 xyz_cones = trasform_img_cones_to_xyz(img_cones, camera_data.width, camera_data.height,
                                       depth_camera_data.config.data_type, depth_camera_data.pixels,
                                       camera_data.config.hfov, camera_data.config.vfov, camera_pos)
-# write detected cones to file:
-# with open('125_detection.txt', 'w') as f:
-#    for item in img_cones:
-#        f.write("%s\n" % item)
+# Write detected cones to file:
+# with open('Run_1_05_20/428_detection.txt', 'w') as f:
+# #    for item in img_cones:
+# #        f.write("%s\n" % item)
 
 # compare ground truth to detection:
 indices = compare_XYZ_to_GT(xyz_cones, xyz_cones_GT)
+
+# save results to csv
+with open('Run_1_05_20/125_detection_vs_ground_truth.csv', 'w', newline='') as file:
+    writer = csv.writer(file)
+    writer.writerow([f"detected: {len(xyz_cones)} / {len(xyz_cones_GT)}",
+                     "units: [meters]", "X - forward","Y - Right", "Z - Up"])
+    writer.writerow(["cone #", "Src", "X", "Y", "Z"])
+    for i, xyz_cone in enumerate(xyz_cones):
+        writer.writerow([i,"detected", round(xyz_cone[0],2), round(xyz_cone[1],2), round(xyz_cone[2],2)])
+        writer.writerow([" ", "GT", round(xyz_cones_GT[indices[i]][0], 2), round(xyz_cones_GT[indices[i]][1], 2), round(xyz_cones_GT[indices[i]][2], 2)])
 
 # Print detection results
 print("Bounding box list in image plain:")
@@ -80,14 +91,14 @@ for i, xyz_cone in enumerate(xyz_cones):
 
 # Export captured images
 img_RGB = Image.frombytes("RGB", (camera_data.width, camera_data.height), camera_data.pixels, 'raw', 'RGBX', 0,-1)
-img_RGB.save('1_camera_msg_4.png')
+img_RGB.save('Run_1_05_20/125_camera_msg_624.png')
 dc_img = Image.frombytes("I;16", (depth_camera_data.width, depth_camera_data.height), depth_camera_data.pixels)
-dc_img.save('1_depth_camera_msg_3.png')
+dc_img.save('Run_1_05_20/125_depth_camera_msg_623.png')
 
 
 # draw detection results on image and export
 img_RGB_boxes = draw_results_on_image(img_RGB, img_cones, type_map)
-img_RGB_boxes.save('1_RGB_detected_cones.jpg')
+img_RGB_boxes.save('Run_1_05_20/125_RGB_detected_cones.jpg')
 
 # close images
 img_RGB.close()
