@@ -9,9 +9,18 @@ import signal
 import os
 import sys
 import math
+import random
 import logging
 import logging.handlers
 import timeit
+
+import torch
+import torch.nn as nn
+from torch.utils.data import DataLoader
+from tensorboardX import SummaryWriter
+import torchvision
+from models import Darknet
+
 from PIL import Image, ImageDraw, ImageFont
 
 from google.protobuf import json_format
@@ -42,7 +51,7 @@ class Perception:
         self.nms_thres = nms_thres
         cuda = torch.cuda.is_available()
         self.device = torch.device('cuda:0' if cuda else 'cpu')
-        logging.info("Running with %s", device)
+        logging.info("Running with %s", self.device)
         random.seed(0)
         torch.manual_seed(0)
         if cuda:
@@ -53,7 +62,7 @@ class Perception:
         self.model = Darknet(config_path=model_cfg,xy_loss=xy_loss,wh_loss=wh_loss,no_object_loss=no_object_loss,object_loss=object_loss,vanilla_anchor=vanilla_anchor)
    
         # Load weights
-        self.model.load_weights(weights_path, model.get_start_weight_dim())
+        self.model.load_weights(weights_path, self.model.get_start_weight_dim())
         self.model.to(self.device, non_blocking=True)
         
 
@@ -79,12 +88,12 @@ class Perception:
         # Camera data has the following properties: width, height, pixels, h_fov, v_fov
         # print(f"Got camera width: {camera_data.width}, height: {camera_data.height}")
 
-        if SAVE_RUN_DIR is not None:
-            with open(os.path.join(SAVE_RUN_DIR, f"{camera_data.frame_number}_camera_msg_{camera_msg.header.id}.bin"), 'wb') as f:
-                f.write(camera_msg.SerializeToString())
+        # if SAVE_RUN_DIR is not None:
+        #     with open(os.path.join(SAVE_RUN_DIR, f"{camera_data.frame_number}_camera_msg_{camera_msg.header.id}.bin"), 'wb') as f:
+        #         f.write(camera_msg.SerializeToString())
 
-            with open(os.path.join(SAVE_RUN_DIR, f"{depth_camera_data.frame_number}_depth_camera_msg_{depth_camera_msg.header.id}.bin"), 'wb') as f:
-                f.write(depth_camera_msg.SerializeToString())
+        #     with open(os.path.join(SAVE_RUN_DIR, f"{depth_camera_data.frame_number}_depth_camera_msg_{depth_camera_msg.header.id}.bin"), 'wb') as f:
+        #         f.write(depth_camera_msg.SerializeToString())
 
         logging.info("Processing camera message frame: %d, depth camera message frame: %d", 
             camera_data.frame_number, depth_camera_data.frame_number)
@@ -117,9 +126,12 @@ class Perception:
         # X,Y,Z - in ENU coordinate system (X - right, Y-forward, Z-upward)
         # type - cone color: 'B' - blue, 'Y' - yellow, 'O' - orange
         camera_pos = camera_data.config.sensor_position
+        if len(img_cones) == 0:
+            return None
+
         xyz_cones = trasform_img_cones_to_xyz(img_cones, camera_data.width, camera_data.height,
-                                              depth_camera_data.config.data_type, depth_camera_data.pixels,
-                                              camera_data.config.hfov, camera_data.config.vfov, camera_pos)
+                                            depth_camera_data.config.data_type, depth_camera_data.pixels,
+                                            camera_data.config.hfov, camera_data.config.vfov, camera_pos)
 
         for index, xyz_cone in enumerate(xyz_cones):
             #   Create new cone and set its properties
@@ -160,7 +172,10 @@ class Perception:
             # In the future can be replaced with getting the camera directly
             camera_msg, depth_camera_msg = self._client.get_camera_message(timeout=self.message_timeout) 
             cone_map = self.process_camera_message(camera_msg, depth_camera_msg)
-
+            if cone_map is None:
+                logging.info("No cones detected")
+                return
+                
             logging.info("Outputing cone map: %s", json_format.MessageToJson(cone_map))
 
             self.send_message2state(camera_msg.header.id, cone_map)    
@@ -205,8 +220,9 @@ class Perception:
             except Exception:
                 logging.warn("Got exception in loop", exc_info=True)
             
-
-perception = Perception()
+weights_path = 'outputs/february-2020-experiments/yolo_baseline/9.weights'
+model_cfg = 'model_cfg/yolo_baseline.cfg'
+perception = Perception(weights_path, model_cfg)
 
 def stop_all_threads():
     print("Stopping threads")
