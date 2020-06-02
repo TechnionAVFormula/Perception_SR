@@ -1,6 +1,9 @@
 from PerceptionClient import PerceptionClient
-from perception_functions import get_cones_from_camera
+# from perception_functions import get_cones_from_camera
+from perception_functions import cones_detection
 from geometry import trasform_img_cones_to_xyz
+
+
 import time
 import signal
 import os
@@ -28,12 +31,31 @@ from timeit import default_timer as timer
 
 
 class Perception:
-    def __init__(self):
+    def __init__(self, weights_path, model_cfg, conf_thres = 0.8, nms_thres = 0.25, xy_loss = 2, wh_loss = 1.6, no_object_loss = 25, object_loss=0.1, vanilla_anchor = False):
         # The sensors.messages can be created using the create_sensors_file.py
         # PerceptionClient(<path to read messages from>, <path to write sent messages to>)
         self._client = PerceptionClient()
         self._running_id = 1
         self.message_timeout = 0.01
+
+        self.conf_thres = conf_thres
+        self.nms_thres = nms_thres
+        cuda = torch.cuda.is_available()
+        self.device = torch.device('cuda:0' if cuda else 'cpu')
+        logging.info("Running with %s", device)
+        random.seed(0)
+        torch.manual_seed(0)
+        if cuda:
+            torch.cuda.manual_seed(0)
+            torch.cuda.manual_seed_all(0)
+            torch.backends.cudnn.benchmark = True
+            torch.cuda.empty_cache()
+        self.model = Darknet(config_path=model_cfg,xy_loss=xy_loss,wh_loss=wh_loss,no_object_loss=no_object_loss,object_loss=object_loss,vanilla_anchor=vanilla_anchor)
+   
+        # Load weights
+        self.model.load_weights(weights_path, model.get_start_weight_dim())
+        self.model.to(self.device, non_blocking=True)
+        
 
     def start(self):
         self._client.connect(1)
@@ -75,13 +97,23 @@ class Perception:
         # w, h - width and height of bounding box in pixels
         # type - cone color: 'B' - blue, 'Y' - yellow, 'O' - orange
         # depth - nominal depth value
+
+        # # set NN parameters     ################## need to set while creating peception object ##################
+        # weights_path = 'weights/YOLOv3_1.weights' 
+        # model_cfg = 'model_cfg/yolo_baseline.cfg'
+
         t1 = timer()
-        img_cones = get_cones_from_camera(camera_data.width, camera_data.height, camera_data.pixels)
+        # img_cones = get_cones_from_camera(camera_data.width, camera_data.height, camera_data.pixels, weights_path, model_cfg)
+        
+        # img_cones is a list of dict: [['u', 'v', 'h', 'w', 'pr', 'type'], ['u', 'v', 'h', 'w', 'pr', 'type], ....]
+        img_cones = cones_detection(camera_data.width, camera_data.height, camera_data.pixels,
+                                    self.model, self.device, self.conf_thres, self.nms_thres)
+
         t2 = timer()
         logging.info("'get_cones_from_camera' took %d [ms]", round((t2-t1)*1000))
 
         # transformation from image plain to cartesian coordinate system
-        # xyz_cones = [[X, Y, Z, type], [X, Y, Z, type], ....]
+        # xyz_cones is list of lists [[X, Y, Z, type], [X, Y, Z, type], ....]
         # X,Y,Z - in ENU coordinate system (X - right, Y-forward, Z-upward)
         # type - cone color: 'B' - blue, 'Y' - yellow, 'O' - orange
         camera_pos = camera_data.config.sensor_position
