@@ -146,93 +146,47 @@ def cut_cones_from_img(target_img, BB):
     crop_img = target_img.crop((x, y,x+w,y+h))
     return crop_img
 
-def predict_cone_color(target_img, BB):
-
-    frame = cut_cones_from_img(target_img, BB)
-    frame = np.array(frame) # convert from PIL to cv
-    hsv_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-
-    # General mask
-    low_general = np.array([0, 50, 80])
-    high_general = np.array([179, 255, 255])
-    general_mask = cv2.inRange(hsv_frame, low_general, high_general)
-    general = cv2.bitwise_and(frame, frame, mask=general_mask)
-    # cv2.imshow("General", general)
-
-    # Yellow color
-    low_yellow = np.array([94, 80, 2])
-    high_yellow = np.array([126, 255, 255])
-    yellow_mask = cv2.inRange(hsv_frame, low_yellow, high_yellow)
-    yellow = cv2.bitwise_and(general, general, mask=yellow_mask)
-    # cv2.imshow("Yellow", yellow)
-
-    # Blue color
-    low_blue = np.array([5, 50, 50])
-    high_blue = np.array([10, 295, 295])
-    blue_mask = cv2.inRange(hsv_frame, low_blue, high_blue)
-    blue = cv2.bitwise_and(general, general, mask=blue_mask)
-    # cv2.imshow("Blue", blue)
-
-    # Orange color
-    low_orange = np.array([20, 190, 20])
-    high_orange = np.array([30, 255, 255])
-    orange_mask = cv2.inRange(hsv_frame, low_orange, high_orange)
-    orange = cv2.bitwise_and(general, general, mask=orange_mask)
-    # cv2.imshow("Orange", orange)
-
-    final_frame = cv2.hconcat((frame, yellow, blue, orange))
-    # cv2.imshow("final_frame", final_frame)
-
-    n_white_pix_yellow = np.sum(yellow_mask == 255)
-    n_white_pix_blue = np.sum(blue_mask == 255)
-    n_white_pix_orange = np.sum(orange_mask == 255)
-    n_white_pix = [n_white_pix_yellow, n_white_pix_blue, n_white_pix_orange]
-    # print('Number of white pixels: Yellow_mask = ', n_white_pix_yellow, " | Blue_mask = ", n_white_pix_blue, " | Orange_mask = ", n_white_pix_orange)
-    max_value = max(n_white_pix)
-    max_idx = n_white_pix.index(max_value)
-
-    if max_idx == 0: # cone is yellow
-        return messages.perception.Yellow
-    elif max_idx == 1: # cone is blue
-        return messages.perception.Blue
-    else: # cone is orange
-        return messages.perception.Orange
-
-
 # def predict_cone_color(target_img, BB):
+
 #     frame = cut_cones_from_img(target_img, BB)
 #     frame = np.array(frame) # convert from PIL to cv
 #     hsv_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
 
-#     imgB = cv2.cvtColor(hsv_frame, cv2.COLOR_BGR2HSV)
-#     imgY = cv2.cvtColor(hsv_frame, cv2.COLOR_BGR2HSV)
+#     # General mask
+#     low_general = np.array([0, 50, 80])
+#     high_general = np.array([179, 255, 255])
+#     general_mask = cv2.inRange(hsv_frame, low_general, high_general)
+#     general = cv2.bitwise_and(frame, frame, mask=general_mask)
+#     # cv2.imshow("General", general)
 
-#     blueLow = np.array([90, 50, 50])
-#     blueHigh = np.array([150, 255, 255])
-#     yellowLow = np.array([20, 100, 100])
-#     yellowHigh = np.array([40, 255, 255])
+#     # Yellow color
+#     low_yellow = np.array([94, 80, 2])
+#     high_yellow = np.array([126, 255, 255])
+#     yellow_mask = cv2.inRange(hsv_frame, low_yellow, high_yellow)
+#     yellow = cv2.bitwise_and(general, general, mask=yellow_mask)
+#     # cv2.imshow("Yellow", yellow)
 
-#     maskBlue = cv2.inRange(imgB, blueLow, blueHigh)
-#     maskBlue2 = cv2.dilate(maskBlue, np.ones((5, 5), np.uint8))
-#     maskBlue3 = cv2.erode(maskBlue2, np.ones((5, 5), np.uint8))
-#     maskYellow = cv2.inRange(imgY, yellowLow, yellowHigh)
-#     maskYellow2 = cv2.dilate(maskYellow, np.ones((5, 5), np.uint8))
-#     maskYellow3 = cv2.erode(maskYellow2, np.ones((5, 5), np.uint8))
-#     outputBlue = cv2.bitwise_and(imgB, imgB, mask=maskBlue3) 
-#     outputYellow = cv2.bitwise_and(imgY, imgY, mask=maskYellow3) 
+#     # Blue color
+#     low_blue = np.array([5, 50, 50])
+#     high_blue = np.array([10, 295, 295])
+#     blue_mask = cv2.inRange(hsv_frame, low_blue, high_blue)
+#     blue = cv2.bitwise_and(general, general, mask=blue_mask)
+#     # cv2.imshow("Blue", blue)
 
-#     tempBlue = cv2.cvtColor(outputBlue, cv2.COLOR_BGR2GRAY)
-#     tempYellow = cv2.cvtColor(outputYellow, cv2.COLOR_BGR2GRAY)
-#     edgedBlue = cv2.Canny(tempBlue, 30, 300)
-#     edgedYellow = cv2.Canny(tempYellow, 30, 300)
-    
+#     # Orange color
+#     low_orange = np.array([20, 190, 20])
+#     high_orange = np.array([30, 255, 255])
+#     orange_mask = cv2.inRange(hsv_frame, low_orange, high_orange)
+#     orange = cv2.bitwise_and(general, general, mask=orange_mask)
+#     # cv2.imshow("Orange", orange)
 
-#     # final_frame = cv2.hconcat((frame, outputYellow, outputBlue))
+#     final_frame = cv2.hconcat((frame, yellow, blue, orange))
 #     # cv2.imshow("final_frame", final_frame)
 
 #     n_white_pix_yellow = np.sum(yellow_mask == 255)
 #     n_white_pix_blue = np.sum(blue_mask == 255)
-#     n_white_pix = [n_white_pix_yellow, n_white_pix_blue]
+#     n_white_pix_orange = np.sum(orange_mask == 255)
+#     n_white_pix = [n_white_pix_yellow, n_white_pix_blue, n_white_pix_orange]
 #     # print('Number of white pixels: Yellow_mask = ', n_white_pix_yellow, " | Blue_mask = ", n_white_pix_blue, " | Orange_mask = ", n_white_pix_orange)
 #     max_value = max(n_white_pix)
 #     max_idx = n_white_pix.index(max_value)
@@ -241,6 +195,57 @@ def predict_cone_color(target_img, BB):
 #         return messages.perception.Yellow
 #     elif max_idx == 1: # cone is blue
 #         return messages.perception.Blue
+#     else: # cone is orange
+#         return messages.perception.Orange
+
+
+def predict_cone_color(target_img, BB):
+
+    # Cut cones from image
+    frame = cut_cones_from_img(target_img, BB)
+    frame = np.array(frame) # convert from PIL to cv
+    hsv_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+
+    #work on yelloe wand blue cones
+    imgB = cv2.cvtColor(hsv_frame, cv2.COLOR_BGR2HSV)
+    imgY = cv2.cvtColor(hsv_frame, cv2.COLOR_BGR2HSV)
+
+    #color range
+    blueLow = np.array([90, 50, 50])
+    blueHigh = np.array([150, 255, 255])
+    yellowLow = np.array([20, 100, 100])
+    yellowHigh = np.array([40, 255, 255])
+
+    #different masks for image
+    maskBlue = cv2.inRange(imgB, blueLow, blueHigh)
+    maskBlue2 = cv2.dilate(maskBlue, np.ones((5, 5), np.uint8))
+    maskBlue3 = cv2.erode(maskBlue2, np.ones((5, 5), np.uint8))
+    maskYellow = cv2.inRange(imgY, yellowLow, yellowHigh)
+    maskYellow2 = cv2.dilate(maskYellow, np.ones((5, 5), np.uint8))
+    maskYellow3 = cv2.erode(maskYellow2, np.ones((5, 5), np.uint8))
+    outputBlue = cv2.bitwise_and(imgB, imgB, mask=maskBlue3) ## 
+    outputYellow = cv2.bitwise_and(imgY, imgY, mask=maskYellow3) ## 
+
+    tempBlue = cv2.cvtColor(outputBlue, cv2.COLOR_BGR2GRAY)
+    tempYellow = cv2.cvtColor(outputYellow, cv2.COLOR_BGR2GRAY)
+    edgedBlue = cv2.Canny(tempBlue, 30, 300)
+    edgedYellow = cv2.Canny(tempYellow, 30, 300)
+    
+
+    final_frame = cv2.hconcat((frame, edgedYellow, edgedBlue))
+    cv2.imshow("final_frame", final_frame)
+
+    n_white_pix_yellow = np.sum(maskYellow3 == 255)
+    n_white_pix_blue = np.sum(maskBlue3 == 255)
+    n_white_pix = [n_white_pix_yellow, n_white_pix_blue]
+    # print('Number of white pixels: Yellow_mask = ', n_white_pix_yellow, " | Blue_mask = ", n_white_pix_blue, " | Orange_mask = ", n_white_pix_orange)
+    max_value = max(n_white_pix)
+    max_idx = n_white_pix.index(max_value)
+
+    if max_idx == 0: # cone is yellow
+        return messages.perception.Yellow
+    elif max_idx == 1: # cone is blue
+        return messages.perception.Blue
 
 
 
