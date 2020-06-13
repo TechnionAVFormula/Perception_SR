@@ -27,13 +27,13 @@ def trasform_img_cones_to_xyz(img_cones,width, height, depth_type, img_depth, h_
     # Choose single representative point in each BB:
     img_cone_points = []  # list of (x,y,type) BB representative point in img plain
     for img_cone in img_cones:
-        img_cone_points.append(get_BB_img_point(img_cone))
+        img_cone_points.append(get_BB_img_point(img_cone)) # Get the u,v of center of BB, and type
     img_cone_points = np.asarray(img_cone_points)
 
     # Preparing indices and appropriate depths values
     index_x = img_cone_points[:, 0].astype(np.int)
     index_y = img_cone_points[:, 1].astype(np.int)
-    depths = depth_arr[index_y, index_x]
+    depths = depth_arr[index_y, index_x]  # Using Matrix mult instead of loop to increase performance
     depths = depths/100  # convert from [cm] to [m]
     depths = convert_radial_to_perpendicular_depth(img_cone_points[:,0:2], depths, cx, cy, f)
 
@@ -70,12 +70,17 @@ def extract_parameters_to_xyz_from_uvd(width, height, h_fov, camera_pos):
     # Transformation from camera -> cognata car coordinate system
     angle = - np.pi / 2.0
 
+    #  Transformation from default camera cord. system (z front, x right, y down) to ENU
     R_ENU = np.array([[1, 0, 0],
                      [0, np.cos(angle), -np.sin(angle)],
                      [0, np.sin(angle), np.cos(angle)]], dtype=np.float)
+
+    #  Transformation from ENU to Cognata (Car) cord system (z up,x front,y left)- get from message: camera rot              
     R_ENU2cognata = np.array([[0, 1, 0],
                               [-1, 0, 0],
                               [0, 0, 1]], dtype=np.float)
+
+    # In the future we will get from Cognata the R matrix, need to check what we get.                           
     R_inv = R_ENU2cognata@R_ENU
 
     # Camera position in cognata car coordinate system
