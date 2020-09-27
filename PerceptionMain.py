@@ -1,8 +1,10 @@
+from image import CameraImage, CameraDeapthImage
+from yolov3_network import YoloV3Network
+
 from PerceptionClient import PerceptionClient
 # from perception_functions import get_cones_from_camera
 from perception_functions import cones_detection
-from geometry import trasform_img_cones_to_xyz
-
+from geometry import img_cones_to_world_cones
 
 import time
 import signal
@@ -40,30 +42,19 @@ from timeit import default_timer as timer
 
 
 class Perception:
-    def __init__(self, weights_path, model_cfg, conf_thres = 0.8, nms_thres = 0.25, xy_loss = 2, wh_loss = 1.6, no_object_loss = 25, object_loss=0.1, vanilla_anchor = False):
+    def __init__(self, weights_path, model_cfg):
         # The sensors.messages can be created using the create_sensors_file.py
         # PerceptionClient(<path to read messages from>, <path to write sent messages to>)
         self._client = PerceptionClient()
         self._running_id = 1
         self.message_timeout = 0.01
+        # Initializing the camera by creating the desired object
+        # self.camera = ....
 
-        self.conf_thres = conf_thres
-        self.nms_thres = nms_thres
-        cuda = torch.cuda.is_available()
-        self.device = torch.device('cuda:0' if cuda else 'cpu')
-        logging.info("Running with %s", self.device)
-        random.seed(0)
-        torch.manual_seed(0)
-        if cuda:
-            torch.cuda.manual_seed(0)
-            torch.cuda.manual_seed_all(0)
-            torch.backends.cudnn.benchmark = True
-            torch.cuda.empty_cache()
-        self.model = Darknet(config_path=model_cfg,xy_loss=xy_loss,wh_loss=wh_loss,no_object_loss=no_object_loss,object_loss=object_loss,vanilla_anchor=vanilla_anchor)
-   
-        # Load weights
-        self.model.load_weights(weights_path, self.model.get_start_weight_dim())
-        self.model.to(self.device, non_blocking=True)
+        # Initializing the cone detector method by creating the desired object
+        self.cone_detector = YoloV3Network(weights_path, model_cfg)
+
+        logging.info("Running with %s", self.cone_detector.device)
         
 
     def start(self):
@@ -79,69 +70,56 @@ class Perception:
  
     def process_camera_message(self, camera_msg, depth_camera_msg):
         logging.info("Started processing camera message id: %d, depth camera message id: %d", 
-            camera_msg.header.id, depth_camera_msg.header.id)
+                    camera_msg.header.id, depth_camera_msg.header.id)
 
-        camera_data = messages.sensors.CameraSensor()
+        camera_data = messages.sensors.CameraSensor() # Camera data has the following properties: width, height, pixels, h_fov, v_fov
         camera_msg.data.Unpack(camera_data)
-        depth_camera_data = messages.sensors.DepthCameraSensor()
+        depth_camera_data = messages.sensors.DepthCameraSensor() # Depth Camera data has the following properties: ????????????
         depth_camera_msg.data.Unpack(depth_camera_data)
-        # Camera data has the following properties: width, height, pixels, h_fov, v_fov
-        # print(f"Got camera width: {camera_data.width}, height: {camera_data.height}")
+        # Creating an image object for camera image and deapth image
+        camera_img = CameraImage(camera_data.pixels, camera_data.width, camera_data.height)
+        deapth_img = CameraDeapthImage(depth_camera_data.pixels, depth_camera_data.width, depth_camera_data.height,
+                                    depth_camera_data.config.data_type, camera_data.config.hfov, 
+                                    camera_data.config.vfov, camera_data.config.sensor_position)
+                                    ###### maybe need camera_data.width/height ????????
 
-        # if SAVE_RUN_DIR is not None:
-        #     with open(os.path.join(SAVE_RUN_DIR, f"{camera_data.frame_number}_camera_msg_{camera_msg.header.id}.bin"), 'wb') as f:
-        #         f.write(camera_msg.SerializeToString())
 
-        #     with open(os.path.join(SAVE_RUN_DIR, f"{depth_camera_data.frame_number}_depth_camera_msg_{depth_camera_msg.header.id}.bin"), 'wb') as f:
-        #         f.write(depth_camera_msg.SerializeToString())
+
 
         logging.info("Processing camera message frame: %d, depth camera message frame: %d", 
-            camera_data.frame_number, depth_camera_data.frame_number)
+                    camera_data.frame_number, depth_camera_data.frame_number)
 
-        # Create the new cone map and append to it all of the recognized cones from the image
+        # Create the cone map message that will contain all the detected cones of the image
         cone_map = messages.perception.ConeMap()
 
-        # Get image cones: img_cones=[[x,y,h,w,type,depth],[x,y,h,w,type,depth],....]
-        # x,y - left top bounding box position in image plain
-        # w, h - width and height of bounding box in pixels
-        # type - cone color: 'B' - blue, 'Y' - yellow, 'O' - orange
-        # depth - nominal depth value
-
-        # # set NN parameters     ################## need to set while creating peception object ##################
-        # weights_path = 'weights/YOLOv3_1.weights' 
-        # model_cfg = 'model_cfg/yolo_baseline.cfg'
-
         t1 = timer()
-        # img_cones = get_cones_from_camera(camera_data.width, camera_data.height, camera_data.pixels, weights_path, model_cfg)
-        
-        # img_cones is a list of dict: [['u', 'v', 'h', 'w', 'pr', 'type'], ['u', 'v', 'h', 'w', 'pr', 'type], ....]
-        img_cones = cones_detection(camera_data.width, camera_data.height, camera_data.pixels,
-                                    self.model, self.device, self.conf_thres, self.nms_thres)
-
+        # img_cones_list is a list of BoundingBoxCone objects
+        img_cones_list = self.cone_detector.detect(camera_img)
         t2 = timer()
         logging.info("'get_cones_from_camera' took %d [ms]", round((t2-t1)*1000))
 
-        # transformation from image plain to cartesian coordinate system
-        # xyz_cones is list of lists [[X, Y, Z, type], [X, Y, Z, type], ....]
-        # X,Y,Z - in ENU coordinate system (X - right, Y-forward, Z-upward)
-        # type - cone color: 'B' - blue, 'Y' - yellow, 'O' - orange
-        camera_pos = camera_data.config.sensor_position
-        if len(img_cones) == 0:
+        
+        if len(img_cones_list) == 0:
             return None
 
-        xyz_cones = trasform_img_cones_to_xyz(img_cones, camera_data.width, camera_data.height,
-                                            depth_camera_data.config.data_type, depth_camera_data.pixels,
-                                            camera_data.config.hfov, camera_data.config.vfov, camera_pos)
+        # Transformation from image plain to 3D world cartesian coordinate system
+        # cone_map is list of WorldCone objects
+        # x,y - in ENU coordinate system (X - right, Y-forward, Z-upward)
+        # type - cone color messege: blue, yellow, orange
+        ###### Where to put this function - utils ???? because it not belong to any class ####################### 
+        world_cones = img_cones_to_world_cones(img_cones_list, deapth_img)
 
-        for index, xyz_cone in enumerate(xyz_cones):
+        # Preparing the cone map message
+        for cone in world_cones:
             #   Create new cone and set its properties
-            cone = messages.perception.Cone()
-            cone.cone_id = index
-            cone.type = xyz_cone[3]
-            cone.x = xyz_cone[0]
-            cone.y = xyz_cone[1]
-            cone.z = xyz_cone[2]
-            cone_map.cones.append(cone)  # append the new cone to the cone map
+            map_cone = messages.perception.Cone()
+            map_cone.cone_id = cone.id
+            map_cone.type = cone.color      # messages.perception.Yellow / messages.perception.Blue / messages.perception.Orange
+            map_cone.x = cone.x
+            map_cone.y = cone.y
+            map_cone.confidence = cone.pr
+            # map_cone.z = 
+            cone_map.cones.append(map_cone)  # append the new cone to the cone map
 
         logging.info("Finished processing camera message %d", camera_msg.header.id)
         return cone_map
@@ -166,7 +144,7 @@ class Perception:
                     return  
         except MessageDeque.NoFormulaMessages:
             pass
-                
+            
     def check_for_camera_messages(self):
         try:
             # In the future can be replaced with getting the camera directly
@@ -220,9 +198,6 @@ class Perception:
             except Exception:
                 logging.warn("Got exception in loop", exc_info=True)
             
-weights_path = 'outputs/february-2020-experiments/yolo_baseline/9.weights'
-model_cfg = 'model_cfg/yolo_baseline.cfg'
-perception = Perception(weights_path, model_cfg)
 
 def stop_all_threads():
     print("Stopping threads")
@@ -258,7 +233,13 @@ def main():
     stop_all_threads()
     exit(0)
 
+
+weights_path = 'outputs/february-2020-experiments/yolo_baseline/9.weights'
+model_cfg = 'model_cfg/yolo_baseline.cfg'
+perception = Perception(weights_path, model_cfg)    
+
 if __name__ == "__main__":
     for signame in ('SIGINT', 'SIGTERM'):
         signal.signal(getattr(signal, signame), shutdown)
     main()
+    
