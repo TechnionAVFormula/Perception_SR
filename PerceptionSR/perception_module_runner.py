@@ -66,6 +66,13 @@ class PerceptionModuleRunner:
             self._client.stop()
             self._client.join()
  
+    @staticmethod
+    def world_cone_color_to_msg_color(color):
+        if color == 'yellow':
+            return messages.perception.Yellow
+        elif color == 'blue':
+            return messages.perception.Blue
+            
     def process_camera_message(self, camera_msg, depth_camera_msg):
         logging.info("Started processing camera message id: %d, depth camera message id: %d", 
                     camera_msg.header.id, depth_camera_msg.header.id)
@@ -76,9 +83,9 @@ class PerceptionModuleRunner:
         depth_camera_msg.data.Unpack(depth_camera_data)
         # Creating an image object for camera image and deapth image
         camera_img = CameraImage(camera_data.pixels, camera_data.width, camera_data.height)
-        deapth_img = CameraDeapthImage(depth_camera_data.pixels, depth_camera_data.width, depth_camera_data.height,
-                                    depth_camera_data.config.data_type, camera_data.config.hfov, 
-                                    camera_data.config.vfov, camera_data.config.sensor_position)
+        deapth_img = DepthImage(depth_camera_data.pixels, depth_camera_data.width, depth_camera_data.height,
+                                depth_camera_data.config.data_type, camera_data.config.hfov, 
+                                camera_data.config.vfov, camera_data.config.sensor_position)
                                     ###### maybe need camera_data.width/height ????????
 
 
@@ -112,7 +119,7 @@ class PerceptionModuleRunner:
             #   Create new cone and set its properties
             map_cone = messages.perception.Cone()
             map_cone.cone_id = cone.id
-            map_cone.type = cone.color      # messages.perception.Yellow / messages.perception.Blue / messages.perception.Orange
+            map_cone.type = PerceptionModuleRunner.world_cone_color_to_msg_color(cone.color)
             map_cone.x = cone.x
             map_cone.y = cone.y
             map_cone.confidence = cone.pr
