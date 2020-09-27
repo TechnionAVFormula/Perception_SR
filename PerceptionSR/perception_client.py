@@ -1,5 +1,5 @@
-from config import CONFIG, IN_MESSAGE_FILE, OUT_MESSAGE_FILE
-from config import ConfigEnum
+from .config import CONFIG, IN_MESSAGE_FILE, OUT_MESSAGE_FILE
+from .config import ConfigEnum
 
 import logging
 

@@ -1,13 +1,23 @@
-from image import CameraImage, CameraDeapthImage
-from yolov3_network import YoloV3Network
+from PerceptionAlgo.camera_image import CameraImage
+from PerceptionAlgo.depth_camera_image import DepthImage
+from PerceptionAlgo.yolov3_network import YoloV3Network
+from PerceptionAlgo.geometry import img_cones_to_world_cones
 
-from PerceptionClient import PerceptionClient
-# from perception_functions import get_cones_from_camera
-from perception_functions import cones_detection
-from geometry import img_cones_to_world_cones
+from .perception_client import PerceptionClient
+
+from .config import CONFIG, SAVE_RUN_DIR
+from .config import ConfigEnum
+
+if (CONFIG  == ConfigEnum.REAL_TIME) or (CONFIG == ConfigEnum.COGNATA_SIMULATION):
+    from pyFormulaClient import messages
+    from pyFormulaClient import MessageDeque
+elif ( CONFIG == ConfigEnum.LOCAL_TEST):
+    from pyFormulaClientNoNvidia import messages
+    from pyFormulaClientNoNvidia import MessageDeque
+else:
+    raise NameError('User Should Choose Configuration from config.py')
 
 import time
-import signal
 import os
 import sys
 import math
@@ -21,27 +31,15 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 from tensorboardX import SummaryWriter
 import torchvision
-from models import Darknet
 
 from PIL import Image, ImageDraw, ImageFont
 
 from google.protobuf import json_format
 
-from config import CONFIG, SAVE_RUN_DIR
-from config import ConfigEnum
-
-if (CONFIG  == ConfigEnum.REAL_TIME) or (CONFIG == ConfigEnum.COGNATA_SIMULATION):
-    from pyFormulaClient import messages
-    from pyFormulaClient import MessageDeque
-elif ( CONFIG == ConfigEnum.LOCAL_TEST):
-    from pyFormulaClientNoNvidia import messages
-    from pyFormulaClientNoNvidia import MessageDeque
-else:
-    raise NameError('User Should Choose Configuration from config.py')
 from timeit import default_timer as timer
 
 
-class Perception:
+class PerceptionModuleRunner:
     def __init__(self, weights_path, model_cfg):
         # The sensors.messages can be created using the create_sensors_file.py
         # PerceptionClient(<path to read messages from>, <path to write sent messages to>)
@@ -197,49 +195,3 @@ class Perception:
                 # self.check_for_ground_truth_messages()
             except Exception:
                 logging.warn("Got exception in loop", exc_info=True)
-            
-
-def stop_all_threads():
-    print("Stopping threads")
-    perception.stop()
-
-def shutdown(a, b):
-    print("Shutdown was called")
-    stop_all_threads()
-    exit(0)
-
-
-def main():
-    logger = logging.getLogger()
-    logger.setLevel(logging.DEBUG)
-
-    # create console handler and set level to debug
-    ch = logging.StreamHandler()
-    ch.setLevel(logging.INFO)
-
-    file_handler = logging.handlers.WatchedFileHandler("perception.log", 'w')
-    formatter = logging.Formatter("%(asctime)s %(levelname)s:%(name)s:%(message)s")
-    file_handler.setFormatter(formatter)
-    file_handler.setLevel(logging.DEBUG)
-
-    logger.addHandler(ch)
-    logger.addHandler(file_handler)
-
-    logging.info("Initalized Perception")
-
-    perception.start()
-    perception.run()
-
-    stop_all_threads()
-    exit(0)
-
-
-weights_path = 'outputs/february-2020-experiments/yolo_baseline/9.weights'
-model_cfg = 'model_cfg/yolo_baseline.cfg'
-perception = Perception(weights_path, model_cfg)    
-
-if __name__ == "__main__":
-    for signame in ('SIGINT', 'SIGTERM'):
-        signal.signal(getattr(signal, signame), shutdown)
-    main()
-    
